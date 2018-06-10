@@ -1,0 +1,29 @@
+{
+  "name": "bccmdemonstrator",
+  "version": "1.0.0",
+  "description": "Software for the BCCM-Demonstrator",
+  "main": "robotOPCUAServer.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jkrause1/BCCMDemonstrator.git"
+  },
+  "keywords": [
+    "BCCM",
+    "Demonstrator"
+  ],
+  "author": "Johannes Krause",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jkrause1/BCCMDemonstrator/issues"
+  },
+  "homepage": "https://github.com/jkrause1/BCCMDemonstrator#readme",
+  "dependencies": {
+    "node-opcua": "^0.4.1",
+    "python-shell": "^0.5.0",
+    "web3": "^1.0.0-beta.34",
+    "yargs": "^11.0.0"
+  }
+}
