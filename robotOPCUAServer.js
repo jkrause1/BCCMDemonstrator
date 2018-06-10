@@ -119,13 +119,14 @@ var argv = yargs(process.argv)
     .alias("h", historyFileOption)
     .default(historyFileOption, "robotOpcuaHistory")
 
-    .version("0.1")
+    .version("1.0")
     .argv;
 
 //#####################################
 //###Functions and methods for OPCUA###
 //#####################################
 
+// Helper method, that requests the servo value of the given servo index.
 function updateServoValue(servoIndex){
     args = ["--Servo=" + (servoIndex+1), "--Method=read"];
     var script = runPythonScript(args);
@@ -136,22 +137,27 @@ function updateServoValue(servoIndex){
     });
 }
 
+// Method, that updates all servo values of the OPCUA server by asking the controller software for each one individually.
 function updateServoValues(){
     for( var i = 0; i < servoCount; i++){
 	updateServoValue(i);
     }
 }
 
+// Reads the servo value of the given servoindex from a saved array. The actual values are getting requested in a certain intervall.
 function getServo(servoIndex){
     return servos[servoIndex];
 }
 
+// Set servo value. Calls controllersoftware to set the physical servo to the given value.
 function setServo(servoIndex, servoValue){
     args = ["--Servo=" + (servoIndex+1), "--Method=write", "--Value=" + servoValue];
     var script = runPythonScript(args);
     return script;
 }
 
+// Helper method, that adds a OPCUA variable to the OPCUA server of the given addressSpace, that represents the value of a servo.
+// robot is the nodeID of the robotarm.
 function addOPCUAServoVariable(servoIndex, addressSpace, robot){
     
     return addressSpace.addVariable({
@@ -175,6 +181,7 @@ function addOPCUAServoVariable(servoIndex, addressSpace, robot){
     });
 }
 
+// Moves arm to the default position.
 function moveArmToInitialPosition(){
     var servoIndex = 0;
     var moveFunc = function(err, script){
@@ -186,6 +193,9 @@ function moveArmToInitialPosition(){
     setServo(servoIndex, 1.5).on(python_close, moveFunc);
 }
 
+// OPCUA server method
+// Gets calles as the last step of initializing a OPCUA server.
+// Defines the published OPCUA variables and methods. Creates a OPCUA client that connects to the initialized server afterwards.
 function opcuaServerPostInitialize(){
     var addressSpace = server.engine.addressSpace;
 
@@ -193,9 +203,12 @@ function opcuaServerPostInitialize(){
 
     var opcua_servos = [];
 
+    // Add OPCUA-Variable fo every servo of the robot arm
     for(var i = 0; i < servoCount; i++)
 	opcua_servos[i] = addOPCUAServoVariable(i, addressSpace, robot);
 
+    
+    // Prepare adding method to OPCUA-Server
     var method = addressSpace.addMethod(robot, {
 	nodeId: "ns=1;s=loadFile",
 	description: "Tries to load a recorded robot movement and plays it.",
@@ -207,7 +220,8 @@ function opcuaServerPostInitialize(){
 	}],
 	outputArguments: []
     });
-    
+
+    //Add OPCUA-Method
     method.bindMethod(function(inputArguments, context, callback){
 	var callMethodResult = {
 	    statusCode: StatusCodes.Good,
@@ -226,6 +240,8 @@ function opcuaServerPostInitialize(){
     initializeOpcuaClient();    
 }
 
+// OPCUA client method
+// Gets called when a opcua client has successfully connected to a OPCUA server. Creates a session, after sucsessfully connecting to a server.
 function onClientConnected(err){
     if(err){
 	logAndWrite(err.toString().red);
@@ -234,6 +250,8 @@ function onClientConnected(err){
     client.createSession(onSessionCreated);
 }
 
+// OPCUA client method
+// Gets called after a session has been successfully created. Saves the given session to a global variables for further use.
 function onSessionCreated(err, sess){
     if(err){
 	logAndWrite(err.toString().red);
@@ -244,17 +262,23 @@ function onSessionCreated(err, sess){
     }
 }
 
+// OPCUA client method
+// Initializues a OPCUA client, that connects to the locally running OPCUA server, to read and write variables, and call methods.
 function initializeOpcuaClient(){
     client = new OPCUAClient({keepSessionAlive:true});
     client.connect("opc.tcp://" + os.hostname() + ":" + port, onClientConnected);
 }
 
+// OPCUA client method
+// Reads a opcua variable from the server
 function readOpcuaVariable(nodeId, callback){
     var nodeToRead = { nodeId: nodeId,
 		       atributeId: AttributeIds.Value}
     session.read(noteToRead, 0, callback);
 }
 
+// OPCUA-client method
+// Changes a variable of the OPCUA server. The nodeid and datatype have to be the same value, with whom they were defined.
 function writeOpcuaVariable(nodeId, dataType, value, callback){
     var noteToWrite = { nodeId: nodeId,
 			attributeId: AttributeIds.Value,
@@ -270,6 +294,8 @@ function writeOpcuaVariable(nodeId, dataType, value, callback){
     session.write(nodeToWrite, callback);
 }
 
+// OPCUA-client method
+// Calls a opcua method of this server. The nodeId has to be the same id, with whom the method was defined
 function callOpcuaMethod(nodeId, args, callback){
     var methodCallRequest = {
 	objectId: "ns=1;i=1000", // Node ID of the robot arm
@@ -284,6 +310,7 @@ function callOpcuaMethod(nodeId, args, callback){
 //###Functions and methods for web3###
 //####################################
 
+// Gets called when a whisper message is posted.
 function onWhisperMessagePosted(error, result){
     if(error){
 	logAndWrite("WHISPER: " + error.toString().red);
@@ -291,6 +318,7 @@ function onWhisperMessagePosted(error, result){
     }
 }
 
+// Gets called when a whisper message is received. Define behaviour for received message here.
 function onWhisperMessageReceived(error, message, subscription){
     if(error){
 	logAndWrite("WHISPER: " + error.toString().red);
@@ -316,19 +344,24 @@ function onWhisperMessageReceived(error, message, subscription){
     }	       
 }
 
+// Connect to a geth client with the given websocket uri
+// Whisper-messages are ONLY provided over a websocket
 function connectToEthNode(wsUri){
     webSocket = new web3(new web3.providers.WebsocketProvider(wsUri));
 }
 
+// Sets password to decrypt whiser messages. Only whisper messages with a fitting password are received. However, all whisper messages are redirected.
 function setPassword(password, callback){
     webSocket.shh.generateSymKeyFromPassword(password, callback);
 }
 
+// Subscribes to a whisper topic. Only topics the whisper client listens to are received. However, all whisper messages are redirected.
 function subscribe(symKeyId, topic){
     var subscribeObject = {symKeyID: symKeyId, topics: [topic]};
     webSocket.shh.subscribe("messages", subscribeObject, onWhisperMessageReceived);
 }
 
+// Posts a whispermessage
 function post(symKeyId, topic, message){
 
     var hexMessage = websocket.utils.toHex(message);
@@ -362,6 +395,7 @@ function initializeWhisperListener(password, topic){
 //###Functions and methods for python-shell###
 //############################################
 
+// Gets called when the called python scripts prints a message to the console.
 function onPythonMessage(message, script){
     if(printPythonConsole){
 	var python = "PYTHON: " + message;
@@ -369,42 +403,48 @@ function onPythonMessage(message, script){
     }
 }
 
+// Gets called when the called python script runs into an error.
 function onPythonError(err, script){
     logAndWrite(("PYTHON: " + err.toString()).red);
 }
 
+// Gets called, when the called python script closed, with or without an error.
 function onPythonClose(err, script){
     if(err) logAndWrite(("PYTHON: " + err.toString()).red);
-    script.end(function(err, code, signal){onPythonEnd(err, code, signal, script)});
+    script.end(function(err, code, signal){onPythonEnd(err, code, signal, script)}); // After pythonsycript closed, end this object and free ressources
     
 }
 
+// Gets called when the python script has been called to end. 
 function onPythonEnd(err, code, signal, script){
     if(err) logAndWrite(("PYTHON: " + err.toString()).red);
 }
 
+// Starts the python script with the cli --File=<fileName>. This should play a previously recorded file for the robot arm.
 function playFile(fileName){
+    // Starts the pythonscript with the --File= option
     args = ["--File=" + fileName];
     runPythonScript(args);
 }
-    
+
+// Runs the python script with the given arguments.    
 function runPythonScript(args){
     pythonOptions.args = args;
     
     var script = new PythonShell(pythonScript, pythonOptions);
-    script.on(python_message, function(message){onPythonMessage(message, script)});
-    script.on(python_error, function(err){onPythonError(err, script)});
-    script.on(python_close, function(err){onPythonClose(err, script)});
+    script.on(python_message, function(message){onPythonMessage(message, script)}); // Gets called when pythonscript prints something to console
+    script.on(python_error, function(err){onPythonError(err, script)}); // Gets called when pythonscript encounters an error
+    script.on(python_close, function(err){onPythonClose(err, script)}); // Gets called when pythonscript closed
     return script;
 }
 
-// Main-Function
-
+// Logs an entry to the console and writes it to the history file.
 function logAndWrite(entry){
     console.log(entry);
     writeHistoryEntry(entry);
 }
 
+// Writes an entry to the histolry file.
 function writeHistoryEntry(entry){
     var date = new Date();
     entry = date + ": " + entry + "\r\n";
@@ -414,6 +454,7 @@ function writeHistoryEntry(entry){
     });
 }
 
+// Save the cli options to global variables.
 function getCLIArguments(){
     port = argv.port;
     applicationName = argv.applicationName;
@@ -427,20 +468,15 @@ function getCLIArguments(){
     historyFileName = argv.historyFile;
 }
 
+// main method.
 function main(){
     getCLIArguments();
     servos = [];
 
     for(var i = 0; i < servoCount; i++)
-	servos[i] = 1.5;
+	servos[i] = 1.5; // Set servos to default values
 
-    var servoValueUpdater = setInterval(updateServoValues, updateInterval);
-    
-    // var userManager = {
-    // isValidUser: function(userName, password){
-    // return (userName == argv.user && password == argv.password);
-    // }
-    //}
+    var servoValueUpdater = setInterval(updateServoValues, updateInterval); // Set intervall for updating OPCUA-Variables of the servo motors
 
     var server_options = {
 	port: port,
