@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#sm!/usr/bin/python
 
 import sys
 import getopt
